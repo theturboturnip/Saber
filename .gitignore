@@ -5,6 +5,7 @@
 *.o
 *.so
 *.out
+*.err
 *.txt
 *.log
 *.log.*

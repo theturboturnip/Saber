@@ -52,7 +52,7 @@ saberProcessIsRunning () {
 	name=$1
 	# Check if process $name is running
 	[ -s "$SABER_PIDDIR/$name.pid" ] && (
-		# $SABER_VERBOSE && echo "$name.pid found"
+		$SABER_VERBOSE && echo "$name.pid found"
 		pid=`cat "$SABER_PIDDIR/$name.pid"`
 		ps -p $pid >/dev/null 2>&1
 		return $?
@@ -73,9 +73,14 @@ saberProcessClear () {
 	shift 1
 	# Check if $name.pid exists but process is not running
 	t=\""$@"\"
-	pgrep -lf "$t" >/dev/null 2>&1
-	if [ \( $? -eq 1 \) -a \( -f "$PIDDIR/$name.pid" \) ]; then
-		rm "$PIDDIR/$name.pid"
+    # This sends a signal on failure, which gets trapped by saberProcessTrap
+	if ! pgrep -lf "$t" ; then # >/dev/null 2>&1
+        # Original: 
+	    # if [ \( $? -eq 1 \) -a \( -f "$PIDDIR/$name.pid" \) ]; then
+        # if previous failed AND $name.pid exists then
+        if [ -f "$PIDDIR/$name.pid" ]; then
+		    rm "$PIDDIR/$name.pid"
+        fi
 	fi
 	return 0
 }

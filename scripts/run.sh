@@ -211,7 +211,8 @@ else
 	#
 	CMD="java $OPTS -cp $JCP $CLS $ARGS"
 	# Try trap signals
-	saberSignalTrapped || saberProcessTrap
+    # SAMUEL COMMENT - This breaks everything! stuff in saberProcessStart that can potentially return 1 (e.g. a pgrep) will trigger this trap
+	# saberSignalTrapped || saberProcessTrap
 	saberProcessStart $ALIAS $CMD
 	#
 	$SABER_VERBOSE && echo "Running application \"$ALIAS\" for $DURATION seconds..."
