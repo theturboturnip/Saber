@@ -38,7 +38,9 @@ JH="$JAVA_HOME"
 } || { # OS is Linux
 	
 	saberProgramExistsOrExit "readlink"
-	JH=`readlink -f $(which java) | awk '{ split($0, t, "/jre/"); print t[1] }'`
+	echo "Finding Java, assuming OpenJDK 11 configuration - previous version of this script did something different"
+	# JH=`readlink -f $(which java) | awk '{ split($0, t, "/jre/"); print t[1] }'`
+	JH=`readlink -f $(which java) | awk '{ split($0, t, "/bin/"); print t[1] }'`
 }
 }
 
@@ -95,8 +97,9 @@ ifeq (\$(OS), Darwin)
 	CFLAGS += -I\$(JAVA_HOME)/include
 	CFLAGS += -I\$(JAVA_HOME)/include/darwin
 else
-	CFLAGS += -I\$(JAVA_HOME)/include
-	CFLAGS += -I\$(JAVA_HOME)/linux
+	# Assuming OpenJDK 11 folder layout - previous versions of this script used different include directories
+	CFLAGS += -I\$(JAVA_HOME)/include        # CFLAGS += -I\$(JAVA_HOME)/include
+	CFLAGS += -I\$(JAVA_HOME)/include/linux  # CFLAGS += -I\$(JAVA_HOME)/linux
 endif
 
 CFLAGS += -I/usr/include -D_GNU_SOURCE
