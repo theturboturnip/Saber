@@ -36,7 +36,78 @@ Optional commands and their packages are `epstopdf` (texlive-font-utils), and `g
 
 Saber requires libOpenCL.so to be present on the OS library path (`LD_LIBRARY_PATH`). In our installation, it is located under `/usr/local/cuda/lib64/`. The OpenCL headers are located under `/usr/local/cuda/include`.
 
-## B) Hardware Info
+## B).1 Hardware Info - Samuel's desktop
+
+I reproduced the results on my desktop computer.
+
+### Processors
+
+<!-- Our machine has 2 Intel Xeon CPU E5-2640 v3 @ 2.60GHz. There are 8 CPU cores per socket. Hyper-threading is disabled. The L1d (L1i), L2, and L3 cache sizes are 32 KB, 256 KB, and 20 MB, respectively. -->
+
+My CPU is a [AMD Ryzen 7 1800X](https://www.amd.com/en/products/cpu/amd-ryzen-7-1800x) Eight-Core Processor @ 3.60GHz. Single socket, 8 cores per socket. Hyper-threading is **enabled**.
+
+Total caches are
+- total L1 (i+d, presumably) = 768KB
+- total L2 = 4MB
+- total L3 = 16MB
+
+### Memory 
+
+<!-- Our machine has a total of 64 GB of DDR4 SDRAM, spread equally across 8 CPU DIMM slots. Clock frequency is 2,133 MHz. -->
+
+My machine has 16 GiB of DDR4, across 2 DIMM slots, clock freq = 3066MHz
+
+### GPU
+
+<!-- The GPU used in our experiments is an NVIDIA Quadro K5200 with 2,304 CUDA cores and 8,123 MB of RAM, attached to the host via PCIe 3.0 x16. The GPU has **two copy engines**, allowing for concurrent copy and kernel execution.-->
+
+My GPU is an NVIDIA GTX 1080 with 2560 CUDA cores and 8,116 MB or RAM, attached via PCIe 3.0 x16.
+The GPU has **two copy engines**, allowing for concurrent copy and kernel execution.
+
+(`sudo lspci -vv | less` to gather PCIe information [stackoverflow link](https://unix.stackexchange.com/questions/393/how-to-check-how-many-lanes-are-used-by-the-pcie-card) [checking pcie version](https://superuser.com/questions/693964/can-i-find-out-if-pci-e-slot-is-1-0-2-0-or-3-0-in-linux-terminal))
+
+```
+Device 0: "GeForce GTX 1080"
+  CUDA Driver Version / Runtime Version          11.2 / 11.0
+  CUDA Capability Major/Minor version number:    6.1
+  Total amount of global memory:                 8116 MBytes (8510701568 bytes)
+  (20) Multiprocessors, (128) CUDA Cores/MP:     2560 CUDA Cores
+  GPU Max Clock rate:                            1734 MHz (1.73 GHz)
+  Memory Clock rate:                             5005 Mhz
+  Memory Bus Width:                              256-bit
+  L2 Cache Size:                                 2097152 bytes
+  Maximum Texture Dimension Size (x,y,z)         1D=(131072), 2D=(131072, 65536), 3D=(16384, 16384, 16384)
+  Maximum Layered 1D Texture Size, (num) layers  1D=(32768), 2048 layers
+  Maximum Layered 2D Texture Size, (num) layers  2D=(32768, 32768), 2048 layers
+  Total amount of constant memory:               65536 bytes
+  Total amount of shared memory per block:       49152 bytes
+  Total number of registers available per block: 65536
+  Warp size:                                     32
+  Maximum number of threads per multiprocessor:  2048
+  Maximum number of threads per block:           1024
+  Max dimension size of a thread block (x,y,z): (1024, 1024, 64)
+  Max dimension size of a grid size    (x,y,z): (2147483647, 65535, 65535)
+  Maximum memory pitch:                          2147483647 bytes
+  Texture alignment:                             512 bytes
+  Concurrent copy and kernel execution:          Yes with 2 copy engine(s)
+  Run time limit on kernels:                     Yes
+  Integrated GPU sharing Host Memory:            No
+  Support host page-locked memory mapping:       Yes
+  Alignment requirement for Surfaces:            Yes
+  Device has ECC support:                        Disabled
+  Device supports Unified Addressing (UVA):      Yes
+  Device supports Managed Memory:                Yes
+  Device supports Compute Preemption:            Yes
+  Supports Cooperative Kernel Launch:            Yes
+  Supports MultiDevice Co-op Kernel Launch:      Yes
+  Device PCI Domain ID / Bus ID / location ID:   0 / 8 / 0
+  Compute Mode:
+     < Default (multiple host threads can use ::cudaSetDevice() with device simultaneously) >
+```
+
+(Above gathered by running the `./deviceInfo` CUDA sample program that comes with CUDA 11)
+
+## B).2 Hardware Info - Original
 
 We performed our experiments on an HP Z840 Workstation.
 
