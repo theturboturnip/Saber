@@ -211,30 +211,31 @@ else
 	#
 	CMD="java $OPTS -cp $JCP $CLS $ARGS"
 	# Try trap signals
-    # SAMUEL COMMENT - This breaks everything! stuff in saberProcessStart that can potentially return 1 (e.g. a pgrep) will trigger this trap
-	# saberSignalTrapped || saberProcessTrap
+	saberSignalTrapped || saberProcessTrap
 	saberProcessStart $ALIAS $CMD
-	#
 	$SABER_VERBOSE && echo "Running application \"$ALIAS\" for $DURATION seconds..."
 	countdown=$DURATION
 	length=${#DURATION} # Length to control printf length
 	interrupted=0
 	
 	while [ $countdown -ne 0 ]; do
-		printf "\rExperiment will stop in %${length}ds (press any key to exit) " $countdown
-		read -n 1 -s -t 1
-		key=$?
-		if [ $key -eq 0 ]; then
-			interrupted=1
-			# Set error code
-			errorcode=1
-			break
+		printf "\rExperiment will stop in %${length}ds (press x to exit) " $countdown
+		if read -n 1 -s -t 1; then
+			if [ "${REPLY}" = "x" ]; then
+				interrupted=1
+				# Set error code
+				errorcode=1
+				break
+			else
+				echo "You pressed something other than x"
+			fi
 		fi
 		saberProcessIsRunning $ALIAS $CMD || {
 			echo "" # Line break
 			echo "error: application \"$ALIAS\" has failed (check "$SABER_LOGDIR"/$ALIAS.err for errors)"
+			echo "going to try and work with this regardless"
 			# Set error code
-			errorcode=1
+			#errorcode=1
 			break
 		}
 		let countdown--
@@ -250,7 +251,8 @@ else
 		saberProcessDone $ALIAS
 		if [ $? -ne 0 ]; then
 			echo "warning: failed to detect whether measurements have been flushed"
-			errorcode=1
+			echo "will still try to complete measurements"
+			#errorcode=1
 		fi
 	fi
 	# Stop the process (and clean-up, even if there has been an error)

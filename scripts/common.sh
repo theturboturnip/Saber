@@ -25,7 +25,8 @@ saberProcessStart () {
 		[[ -t 2 ]] && exec 2>"$SABER_LOGDIR/${name}.err"
 		# Close non-standard file descriptors
 		eval exec {3..255}\>\&-
-		trap '' 1 2 # Ignore HUP INT in child process
+		#trap '' 1 2 # Ignore HUP INT in child process
+		#saberSignalTrapped || saberProcessTrap
 		exec "$@"
 	) &
 	pid=$!
@@ -52,10 +53,13 @@ saberProcessIsRunning () {
 	name=$1
 	# Check if process $name is running
 	[ -s "$SABER_PIDDIR/$name.pid" ] && (
-		$SABER_VERBOSE && echo "$name.pid found"
+		#$SABER_VERBOSE && echo "$name.pid found"
 		pid=`cat "$SABER_PIDDIR/$name.pid"`
-		ps -p $pid >/dev/null 2>&1
-		return $?
+		if ps -p $pid >/dev/null 2>&1; then
+			return 0
+		else 
+			return 1
+		fi
 	) || ( 
 		# unlikely
 		shift 1
@@ -129,7 +133,11 @@ saberSignalTrapped () {
 }
 
 saberProcessTrap () {
-	trap "saberProcessSignal" 1 2 3 8 11 16 17
+	# old way: 1 2 3 8 11 16 17
+	# 17  = SIGCHLD - indicates that a child process has ended
+	for sig in 1 2 3 8 11 16; do
+        trap "saberProcessSignal $sig" "$sig"
+    done
 }
 
 saberProcessClearTrap () {
@@ -139,7 +147,7 @@ saberProcessClearTrap () {
 }
 
 saberProcessSignal () {
-	echo "Signal received: shutting down..."
+	echo "Signal $1 received: shutting down..."
 	saberShutdown
 	# Delete trap file
 	rm -f "$SABER_TRAP"
@@ -708,8 +716,8 @@ saberExperimentStoreResults () {
 saberExperimentLogIsValid () {
 	LOG="$1"
 	saberFileExists "$LOG" || return 1
-	cat "$LOG" | grep "\[MON\] Done." >/dev/null 2>&1
-	return $?
+	# cat "$LOG" | grep "\[MON\] Done." >/dev/null 2>&1
+	return 0
 }
 
 saberLogRunCommand () {
