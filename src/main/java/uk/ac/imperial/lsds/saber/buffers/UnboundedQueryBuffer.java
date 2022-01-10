@@ -89,15 +89,23 @@ public class UnboundedQueryBuffer implements IQueryBuffer {
 		buffer.clear();
 	}
 	
-	@SuppressWarnings("finally")
+	private void handleBufferOverflow(BufferOverflowException e) {
+		System.err.println(String.format("[ERR] BufferOverflow in UnboundedQuery Buffer id=%d size=%d isDirect=%b buffer=%s", id,
+			buffer.capacity(),
+			isDirect,
+			buffer
+		));
+		e.printStackTrace();
+		throw e;
+	}
+
 	public int putInt (int value) { 
 		try {
 			buffer.putInt(value);
 		} catch (BufferOverflowException e) {
-			e.printStackTrace();
-		} finally {
-			return 0;
+			handleBufferOverflow(e);
 		}
+		return 0;
 	}
 	
 	public int putInt (int index, int value) {
@@ -106,15 +114,13 @@ public class UnboundedQueryBuffer implements IQueryBuffer {
 		return 0;
 	}
 	
-	@SuppressWarnings("finally")
 	public int putFloat (float value) {
  		try {
 			buffer.putFloat(value);
 		} catch (BufferOverflowException e) {
-			e.printStackTrace();
-		} finally {
-			return 0;
+			handleBufferOverflow(e);
 		}
+		return 0;
 	}
 	
 	public int putFloat (int index, float value) {
@@ -123,15 +129,13 @@ public class UnboundedQueryBuffer implements IQueryBuffer {
 		return 0;
 	}
 	
-	@SuppressWarnings("finally")
 	public int putLong (long value) {
 		try {
 			buffer.putLong(value);
 		} catch (BufferOverflowException e) {
-			e.printStackTrace();
-		} finally {
-			return 0;
+			handleBufferOverflow(e);
 		}
+		return 0;
 	}
 	
 	public int putLong (int index, long value) {
@@ -140,15 +144,13 @@ public class UnboundedQueryBuffer implements IQueryBuffer {
 		return 0;
 	}
 	
-	@SuppressWarnings("finally")
 	public int put (byte [] values) {
 		try {
 			buffer.put(values);
 		} catch (BufferOverflowException e) {
-			e.printStackTrace();
-		} finally {
-			return 0;
+			handleBufferOverflow(e);
 		}
+		return 0;
 	}
 	
 	public int put (byte [] src, int offset, int length) {
