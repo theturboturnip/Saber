@@ -205,6 +205,10 @@ public class WindowBatch {
 	}
 	
 	public void setBufferPointers (int start, int end) {
+		if ((end - start)/32 >= 520000) {
+			Exception ex = new RuntimeException("Tried to setBufferPointers too big");
+			ex.printStackTrace();
+		}
 		startPointer = start;
 		endPointer = end;
 	}
@@ -316,6 +320,7 @@ public class WindowBatch {
 	
 	public void clear () {
 		initialised = false;
+		System.out.println(String.format("WindowBatch with buffer %s is being cleared", buffer));
 	}
 	
 	/*

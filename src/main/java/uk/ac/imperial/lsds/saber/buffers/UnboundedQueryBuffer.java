@@ -90,7 +90,8 @@ public class UnboundedQueryBuffer implements IQueryBuffer {
 	}
 	
 	private void handleBufferOverflow(BufferOverflowException e) {
-		System.err.println(String.format("[ERR] BufferOverflow in UnboundedQuery Buffer id=%d size=%d isDirect=%b buffer=%s", id,
+		System.err.println(String.format("[ERR] BufferOverflow in UnboundedQueryBuffer %s id=%d size=%d isDirect=%b buffer=%s", 
+			this, id,
 			buffer.capacity(),
 			isDirect,
 			buffer
@@ -154,14 +155,20 @@ public class UnboundedQueryBuffer implements IQueryBuffer {
 	}
 	
 	public int put (byte [] src, int offset, int length) {
-		
-		buffer.put(src, offset, length);
+		try {
+			buffer.put(src, offset, length);
+		} catch (BufferOverflowException e) {
+			handleBufferOverflow(e);
+		}
 		return 0;
 	}
 	
 	public int put (byte [] src, int length) {
-		
-		buffer.put(src, 0, length);
+		try {
+			buffer.put(src, 0, length);
+		} catch (BufferOverflowException e) {
+			handleBufferOverflow(e);
+		}
 		return 0;
 	}
 	

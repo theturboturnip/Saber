@@ -177,13 +177,15 @@ public class JoinTaskDispatcher implements ITaskDispatcher {
 				latencyMark = idx;
 		}
 		
-		firstEndIndex = idx + length - firstTupleSize;
+		firstEndIndex = (idx + length - firstTupleSize) & mask;
 		
 		synchronized (lock) {
 			
-			if (firstEndIndex < firstStartIndex)
+			if (firstEndIndex < firstStartIndex) {
+				System.err.println("Wrapping firstEndIndex around: start " + firstStartIndex + " end " + firstEndIndex + " cap " + firstBuffer.capacity());
 				firstEndIndex += firstBuffer.capacity();
-			
+			}
+
 			firstToProcessCount = 
 					(firstEndIndex - firstStartIndex + firstTupleSize) / firstTupleSize;
 					
@@ -215,6 +217,15 @@ public class JoinTaskDispatcher implements ITaskDispatcher {
 			} else {
 				throw new UnsupportedOperationException("error: window is neither row-based nor range-based");
 			}
+
+			if ((firstEndIndex - firstStartIndex)/32 >= 520000) {
+				int size = 
+					( firstToProcessCount *  firstTupleSize) + 
+					(secondToProcessCount * secondTupleSize);
+		
+				Exception ex = new RuntimeException("Trying to assembleSecond too big size " + size + " batchsize " + this.batchSize);
+				ex.printStackTrace();
+			}
 			
 			/* Check whether we have enough data to create a task */
 			int size = 
@@ -230,15 +241,25 @@ public class JoinTaskDispatcher implements ITaskDispatcher {
 		
 		// System.out.println(String.format("[DBG] assemble 2: idx %10d length %10d", idx, length));
 		
-		secondEndIndex = idx + length - secondTupleSize;
-		
+		secondEndIndex = (idx + length - secondTupleSize) & mask;
+		if ((secondEndIndex - secondStartIndex)/32 >= 520000) {
+			Exception ex = new RuntimeException("secondEndIndex too big: start " + secondStartIndex + " idx " + idx + " length " + length + " secondTupleSize " + secondTupleSize);
+			ex.printStackTrace();
+		}
+
 		synchronized (lock) {
 			
-			if (secondEndIndex < secondStartIndex)
+			if (secondEndIndex < secondStartIndex) {
+				System.err.println("Wrapping secondEndIndex around: start " + secondStartIndex + " end " + secondEndIndex + " cap " + secondBuffer.capacity());
 				secondEndIndex += secondBuffer.capacity();
-			
+			}
+
 			secondToProcessCount = 
 					(secondEndIndex - secondStartIndex + secondTupleSize) / secondTupleSize;
+			if (secondToProcessCount > 520000) {
+				Exception ex = new RuntimeException("secondToProcessCount to big: " + secondToProcessCount);
+				ex.printStackTrace();
+			}
 					
 			if (secondWindow.isRowBased()) {
 				
@@ -261,6 +282,15 @@ public class JoinTaskDispatcher implements ITaskDispatcher {
 				
 			} else {
 				throw new UnsupportedOperationException("error: window is neither row-based nor range-based");
+			}
+
+			if ((secondEndIndex - secondStartIndex)/32 >= 520000) {
+				int size = 
+					( firstToProcessCount *  firstTupleSize) + 
+					(secondToProcessCount * secondTupleSize);
+		
+				Exception ex = new RuntimeException("Trying to assembleSecond too big size " + size + " batchsize " + this.batchSize);
+				ex.printStackTrace();
 			}
 			
 			/* Check whether we have enough data to create a task */
@@ -337,6 +367,19 @@ public class JoinTaskDispatcher implements ITaskDispatcher {
 				-1
 			);
 		
+		if (assembledFirst && (normaliseIndex (secondBuffer, secondStartIndex, secondEndIndex) - secondStartIndex) / 32 > 520000) {
+			System.err.println("normalized second start too large start " + secondStartIndex + " end " + secondEndIndex + " norm " + normaliseIndex (secondBuffer, secondStartIndex, secondEndIndex));
+		}
+		if (assembledFirst && (normaliseIndex (firstBuffer, firstLastEndIndex, firstEndIndex) - firstLastEndIndex) / 32 > 520000) {
+			System.err.println("normalized first start too large lastend " + firstLastEndIndex + " end " + firstEndIndex + " norm " + normaliseIndex (firstBuffer, firstLastEndIndex, firstEndIndex));
+		}
+		if (!assembledFirst && (normaliseIndex (secondBuffer, secondLastEndIndex, secondEndIndex) - secondLastEndIndex) / 32 > 520000) {
+			System.err.println("normalized second start too large lastend " + secondLastEndIndex + " end " + secondEndIndex + " norm " + normaliseIndex (secondBuffer, secondLastEndIndex, secondEndIndex));
+		}
+		if (!assembledFirst && (normaliseIndex (firstBuffer, firstStartIndex, firstEndIndex) - firstStartIndex) / 32 > 520000) {
+			System.err.println("normalized first start too large start " + firstStartIndex + " end " + firstEndIndex + " norm " + normaliseIndex (firstBuffer, firstStartIndex, firstEndIndex));
+		}
+
 		if (assembledFirst) {
 			
 			batch1.setBufferPointers 
@@ -392,14 +435,27 @@ public class JoinTaskDispatcher implements ITaskDispatcher {
 		/*
 		 * Second, move the start pointer for the next task to the next pointer.
 		 */
-		if (firstNextIndex > mask)
+		if (firstNextIndex > mask) {
+			System.err.println("masking out firstNextIndex: initial " + firstNextIndex + " masked " + (firstNextIndex & mask));
 			firstNextIndex = firstNextIndex & mask;
-		
-		if (secondNextIndex > mask)
+			firstEndIndex = firstEndIndex & mask;
+		}
+
+		if (secondNextIndex > mask) {
+			System.err.println("masking out secondNextIndex: initial " + secondNextIndex + " masked " + (secondNextIndex & mask));
 			secondNextIndex = secondNextIndex & mask;
-		
+			secondEndIndex = secondEndIndex & mask;
+		}
+
 		 firstStartIndex =  firstNextIndex;
 		secondStartIndex = secondNextIndex;
+
+		if ((firstEndIndex - firstStartIndex) / 32 > 520000) {
+			System.err.println("firstNextIndex bad - start " + firstStartIndex + " end " + firstEndIndex + " mask " + mask);
+		}
+		if ((secondEndIndex - secondStartIndex) / 32 > 520000) {
+			System.err.println("secondNextIndex bad - start " + secondStartIndex + " end " + secondEndIndex + " mask " + mask);
+		}
 	}
 	
 	private int getTaskNumber () {

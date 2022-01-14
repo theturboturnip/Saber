@@ -1,5 +1,7 @@
 package uk.ac.imperial.lsds.saber.cql.operators.cpu;
 
+import java.nio.BufferOverflowException;
+
 import uk.ac.imperial.lsds.saber.ITupleSchema;
 import uk.ac.imperial.lsds.saber.SystemConf;
 import uk.ac.imperial.lsds.saber.Utils;
@@ -14,7 +16,7 @@ import uk.ac.imperial.lsds.saber.tasks.IWindowAPI;
 
 public class ThetaJoin implements IOperatorCode {
 	
-	private static boolean debug = false;
+	private static boolean debug = true;
 	private static boolean monitorSelectivity = false;
 	
 	private long invoked = 0L;
@@ -60,19 +62,53 @@ public class ThetaJoin implements IOperatorCode {
 		WindowDefinition windowDef2 = batch2.getWindowDefinition();
 		
 		if (debug) {
+			int nTuples1 = (endIndex1 - currentIndex1)/tupleSize1;
+			int nTuples2 = (endIndex2 - currentIndex2)/tupleSize2;
+
 			System.out.println(
-				String.format("[DBG] t %6d batch-1 [%10d, %10d] %10d tuples [f %10d] / batch-2 [%10d, %10d] %10d tuples [f %10d]", 
+				String.format("[DBG] t %6d batch-1 [%10d, %10d] %10d tuples [f %10d] / batch-2 [%10d, %10d] %10d tuples [f %10d] | output p %d c %d", 
 					batch1.getTaskId(), 
 					currentIndex1, 
 					endIndex1, 
-					(endIndex1 + tupleSize1 - currentIndex1)/tupleSize1,
+					nTuples1 + 1,
 					batch1.getFreePointer(),
 					currentIndex2, 
 					endIndex2,
-					(endIndex2 + tupleSize2 - currentIndex2)/tupleSize2,
-					batch2.getFreePointer()
+					nTuples2 + 1,
+					batch2.getFreePointer(),
+					outputBuffer.position(),
+					outputBuffer.capacity()
 				)
 			);
+
+			if (windowDef1.isRowBased() && windowDef2.isRowBased()) {
+				// Both windows are fixed-size
+
+				// Each element in the first stream is joined with at most window2Size other elements,
+				// each join is (tupleSize1+tupleSize2) bytes of output
+				// The windows may be of different sizes(?) and the batches may have different no.s of elements, so try both
+				// We're also bounded by the number of total tuples - we can't produce duplicates, so we can't go beyond nTuples1 * nTuples2
+				long maxNumJoins = Math.min(Math.max(nTuples1 * windowDef2.getSize(), nTuples2 * windowDef1.getSize()), nTuples1 * nTuples2);
+				long maxRequiredCapacity = maxNumJoins * (tupleSize1 + tupleSize2 + outputSchema.getPad().length);
+
+				System.out.println(
+					String.format("[DBG] t %6d maxNumJoins %d maxRequiredCapacity %d output c %d", 
+						batch1.getTaskId(), 
+						maxNumJoins,
+						maxRequiredCapacity,
+						outputBuffer.capacity() - outputBuffer.position()
+					)
+				);
+
+				if (maxRequiredCapacity > (outputBuffer.capacity() - outputBuffer.position())) {
+					throw new RuntimeException(String.format(
+						"t %d Output buffer isn't large enough - needed %d bytes but got %d",
+						batch1.getTaskId(), 
+						maxRequiredCapacity, (outputBuffer.capacity() - outputBuffer.position())
+					));
+				}
+			}
+
 		}
 		
 		long currentTimestamp1, startTimestamp1;
@@ -81,63 +117,39 @@ public class ThetaJoin implements IOperatorCode {
 		if (monitorSelectivity)
 			invoked = matched = 0L;
 		
-		// if (currentIndex2 == 0 && endIndex2 == 0)
-		//	endIndex2 = tupleSize2;
 		
-		/* Is one of the windows empty? */
+		// If the set of elements we're processing is not empty for either stream 
 		if (currentIndex1 != endIndex1 && currentIndex2 != endIndex2) {
 			
 			int prevCurrentIndex1 = -1;
 			int countMatchPositions = 0;
-		
-			// Changed <=, <=, || to &&
-			// while (currentIndex1 < endIndex1 && currentIndex2 <= endIndex2) {
-			// OLD
+
+			// *while* the set of elements we're processing is not empty for either stream
 			while (currentIndex1 < endIndex1 || currentIndex2 < endIndex2) {
 				
 				// System.out.println(String.format("[DBG] batch-1 index %10d end %10d batch-2 index %10d end %10d",
 				//		currentIndex1, endIndex1, currentIndex2, endIndex2));
 				
 				/* Get timestamps of currently processed tuples in either batch */
-				currentTimestamp1 = getTimestamp( batch1,  currentIndex1, 0);
+				currentTimestamp1 = getTimestamp(batch1, currentIndex1, 0);
 				currentTimestamp2 = getTimestamp(batch2, currentIndex2, 0);
 				
 				/* Move in first batch? */
+				// If the second stream is ahead (either because timestamp1 < timestamp2, or because the second window is closed)
+					// take the next element in the first stream, 
+					// join it with all elements in the second window,
+					// send results to the output buffer,
+					// move the first window up so it includes the element we just processed
+				// Otherwise the first stream is ahead
+					// take the next element in the second stream, 
+					// join it with all elements in the first window,
+					// send results to the output buffer,
+					// move the second window up so it includes the element we just processed
 				if (
 					(currentTimestamp1 < currentTimestamp2) || 
 					(currentTimestamp1 == currentTimestamp2 && currentIndex2 >= endIndex2)) {
 					
-					/* Scan second window */
-					
-					// Changed here: <=
-					// for (int i = currentWindowStart2; i <= currentWindowEnd2; i += tupleSize2) {
-					// OLD
 					for (int i = currentWindowStart2; i < currentWindowEnd2; i += tupleSize2) {
-						
-						// System.out.println(String.format("[DBG] 1st window index %10d 2nd window index %10d", 
-						//		currentIndex1, i));
-						
-//						System.out.println(String.format("tuple %6d %010d: %2d,%2d,%2d,%2d,%2d,%2d,%2d | %010d: %2d,%2d,%2d,%2d,%2d,%2d,%2d | %5s", 
-//								currentIndex1 / 32,
-//								currentIndex1,
-//								buffer1.getByteBuffer().getLong(currentIndex1 +  0),
-//								buffer1.getByteBuffer().getInt (currentIndex1 +  8),
-//								buffer1.getByteBuffer().getInt (currentIndex1 + 12),
-//								buffer1.getByteBuffer().getInt (currentIndex1 + 16),
-//								buffer1.getByteBuffer().getInt (currentIndex1 + 20),
-//								buffer1.getByteBuffer().getInt (currentIndex1 + 24),
-//								buffer1.getByteBuffer().getInt (currentIndex1 + 28),
-//								i,
-//								buffer2.getByteBuffer().getLong(i +  0),
-//								buffer2.getByteBuffer().getInt (i +  8),
-//								buffer2.getByteBuffer().getInt (i + 12),
-//								buffer2.getByteBuffer().getInt (i + 16),
-//								buffer2.getByteBuffer().getInt (i + 20),
-//								buffer2.getByteBuffer().getInt (i + 24),
-//								buffer2.getByteBuffer().getInt (i + 28),
-//								predicate.satisfied (buffer1, schema1, currentIndex1, buffer2, schema2, i)
-//								));
-						
 						if (monitorSelectivity)
 							invoked ++;
 						
@@ -154,8 +166,15 @@ public class ThetaJoin implements IOperatorCode {
 							// System.out.println(String.format("[DBG] match at currentIndex1 = %10d (count = %6d)", 
 							//		currentIndex1, countMatchPositions));
 							
+							try {
 							buffer1.appendBytesTo(currentIndex1, tupleSize1, outputBuffer);
 							buffer2.appendBytesTo(            i, tupleSize2, outputBuffer);
+							} catch (BufferOverflowException ex) {
+								System.out.println(String.format("[DBG] t %6d outputBuffer pos=%d",
+								batch1.getTaskId(), 
+								outputBuffer.position()));
+								throw ex;
+							}
 							/* Write dummy content, if needed */
 							outputBuffer.put(outputSchema.getPad());
 							
@@ -220,8 +239,15 @@ public class ThetaJoin implements IOperatorCode {
 							
 							// System.out.println("[DBG] Match in first window...");
 							
+							try {
 							buffer1.appendBytesTo(            i, tupleSize1, outputBuffer);
 							buffer2.appendBytesTo(currentIndex2, tupleSize2, outputBuffer);
+							} catch (BufferOverflowException ex) {
+								System.out.println(String.format("[DBG] t %6d outputBuffer pos=%d", 
+								batch1.getTaskId(), 
+								outputBuffer.position()));
+								throw ex;
+							}
 							/* Write dummy content if needed */
 							outputBuffer.put(outputSchema.getPad());
 							
@@ -313,6 +339,7 @@ public class ThetaJoin implements IOperatorCode {
 			));
 		}
 		*/
+		System.out.println("output Window Batch Result");
 		api.outputWindowBatchResult(batch1);
 		/*
 		System.err.println("Disrupted");
